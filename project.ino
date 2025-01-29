@@ -158,51 +158,6 @@ void handleMedicine(String scannerData) {
   Serial.println("Cleaned Data: " + scannerData);
 }
 
-// void loop() {
-//   int irValue = digitalRead(IR_SENSOR_PIN);  // Read IR sensor value
-
-//   // Start scanning if object detected, not in cool-down, and not already scanning
-//   if (irValue == LOW && !isScanning && !coolDown) {
-//     Serial.println("Start scanning...");
-//     digitalWrite(SCANNER_PIN, LOW);  // Activate scanner
-//     digitalWrite(LED_PIN, HIGH);
-//     isScanning = true;
-//     startScanTime = millis();
-//   }
-
-//   // Stop scanning after scan duration
-//   if (isScanning && (millis() - startScanTime >= scanDuration)) {
-//     Serial.println("Stop scanning.");
-//     digitalWrite(SCANNER_PIN, HIGH);  // Deactivate scanner
-//     digitalWrite(LED_PIN, LOW);
-//     isScanning = false;
-
-//     // Start cool-down period
-//     coolDown = true;
-//     coolDownStartTime = millis();
-//   }
-
-//   // End cool-down period after cool-down duration
-//   if (coolDown && (millis() - coolDownStartTime >= coolDownDuration)) {
-//     Serial.println("Cool-down complete. Ready for next scan.");
-//     coolDown = false;
-//   }
-
-//   // Handle data if string is complete
-//   if (stringComplete) {
-//     handleMedicine(DataScanner);
-//     inputString = "";  // Clear input buffer
-//     DataScanner = "";  // Clear processed data
-//     stringComplete = false;
-//   }
-
-//   // ตรวจสอบว่าควรลบข้อความจาก LCD หรือไม่
-//   if (isDisplaying && millis() - displayStartTime >= clearDelay) {
-//     lcd.clear();
-//     isDisplaying = false;  // Reset status
-//   }
-// }
-
 void loop() {
   if (digitalRead(IR_SENSOR_PIN) == LOW && !isScanning) {
     startScanning();
