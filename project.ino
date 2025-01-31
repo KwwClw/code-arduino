@@ -81,6 +81,12 @@ void setup() {
   }
   // myDFPlayer.volume(volume);  // Set volume level
   Serial.println(F("DFPlayer Mini online."));
+  
+  lcd.setCursor(0, 0);
+  lcd.print("Ready to use");
+  
+  delay(5000);  // แสดงข้อความ 5 วินาที
+  lcd.clear();   // ล้างจอ LCD
 }
 
 void handleMedicine(String scannerData) {
