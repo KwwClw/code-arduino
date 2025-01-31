@@ -13,7 +13,6 @@ DFRobotDFPlayerMini myDFPlayer;
 #define TX_PIN 17         // Connect to DFPlayer's RX
 #define IR_SENSOR_PIN 13  // Pin for IR sensor
 #define SCANNER_PIN 15    // Pin for scanner control
-#define MAX_DISTANCE 100
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // LCD I2C address: 0x27, size: 16x2
 
@@ -32,7 +31,7 @@ bool isDisplaying = false;           // สถานะแสดงผล LCD
 String inputString = "";      // Store data from scanner
 String DataScanner = "";      // Processed scanner data
 bool stringComplete = false;  // Flag to indicate complete data
-byte volume = 10; //กำหนดระดับความดัง 0 - 30
+byte volume = 22; //กำหนดระดับความดัง 0 - 30
 
 struct Medicine {
   String code;
@@ -63,6 +62,7 @@ void setup() {
   pinMode(IR_SENSOR_PIN, INPUT);                             // IR sensor input
   pinMode(SCANNER_PIN, OUTPUT);                              // Scanner control output
   pinMode(LED_PIN, OUTPUT);
+
   lcd.begin();      // Initialize LCD
   lcd.backlight();  // Turn on LCD backlight
 
@@ -81,7 +81,7 @@ void setup() {
   }
   // myDFPlayer.volume(volume);  // Set volume level
   Serial.println(F("DFPlayer Mini online."));
-  
+
   lcd.setCursor(0, 0);
   lcd.print("Ready to use");
   
@@ -129,12 +129,6 @@ void handleMedicine(String scannerData) {
       lcd.setCursor(0, 1);
       lcd.print(secondLine);
 
-      // if(!myDFPlayer.begin(myHardwareSerial)) {
-      //   Serial.println("No module mp3");
-      //   lcd.clear();
-      //   lcd.print("No module mp3");
-      // }
-
       // Play the corresponding track
       myDFPlayer.volume(volume); 
       myDFPlayer.play(med.track);
@@ -180,6 +174,12 @@ void loop() {
     DataScanner = "";  // Clear processed data
     stringComplete = false;
   }
+
+  //   // ตรวจสอบว่าควรลบข้อความจาก LCD หรือไม่
+  if (isDisplaying && millis() - displayStartTime >= clearDelay) {
+    lcd.clear();
+    isDisplaying = false;  // Reset status
+  }
 }
 
 // ฟังก์ชันเริ่มการสแกน
@@ -188,8 +188,7 @@ void startScanning() {
   startScanTime = millis();
   digitalWrite(SCANNER_PIN, LOW); // เปิดเครื่องสแกน
   digitalWrite(LED_PIN, HIGH);   // เปิดไฟ LED
-  // lcd.clear();
-  // lcd.print("Scanning...");
+  Serial.println("Scanning...");
 }
 
 // ฟังก์ชันหยุดการสแกน
@@ -197,10 +196,9 @@ void stopScanning() {
   isScanning = false;
   digitalWrite(SCANNER_PIN, HIGH); // ปิดเครื่องสแกน
   digitalWrite(LED_PIN, LOW);      // ปิดไฟ LED
-  // lcd.clear();
-  // lcd.print("Scan complete");
-  // delay(1000); // แสดงข้อความก่อนกลับสู่สถานะพร้อม
-  // lcd.clear();
+  Serial.println("Scan complete");
+  delay(1000); // แสดงข้อความก่อนกลับสู่สถานะพร้อม
+  lcd.clear();
 }
 
 // Function to read data from serial input
