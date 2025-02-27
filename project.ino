@@ -4,34 +4,35 @@
 #include "DFRobotDFPlayerMini.h"
 
 // Use HardwareSerial for ESP32
-HardwareSerial myHardwareSerial(1);  // Use Serial1
+HardwareSerial myHardwareSerial(1);  // Serial1 for DFPlayer
 DFRobotDFPlayerMini myDFPlayer;
 
-// Define RX and TX pins
+// Define pins
 #define LED_PIN 12
-#define RX_PIN 16         // Connect to DFPlayer's TX
-#define TX_PIN 17         // Connect to DFPlayer's RX
-#define IR_SENSOR_PIN 13  // Pin for IR sensor
-#define SCANNER_PIN 15    // Pin for scanner control
+#define RX_PIN 16         // DFPlayer TX
+#define TX_PIN 17         // DFPlayer RX
+#define IR_SENSOR_PIN 13  // IR sensor input
+#define SCANNER_PIN 15    // Scanner control
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);  // LCD I2C address: 0x27, size: 16x2
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // LCD I2C address
 
-bool isScanning = false;                      // Scanning state
-bool coolDown = false;                        // Cool-down state
-unsigned long startScanTime = 0;              // Start time for scanning
-unsigned long coolDownStartTime = 0;          // Start time for cool-down
-const unsigned long scanDuration = 5000;      // Scanning duration (5 seconds)
-const unsigned long coolDownDuration = 3000;  // Cool-down duration (3 seconds)
-const unsigned long clearDelay = 20000;       // ระยะเวลาสำหรับลบข้อความ (20 วินาที)
+bool isScanning = false;
+bool coolDown = false;
+unsigned long startScanTime = 0;
+unsigned long coolDownStartTime = 0;
+const unsigned long scanDuration = 5000;
+const unsigned long coolDownDuration = 3000;
+const unsigned long clearDelay = 20000;
 
-// เพิ่มตัวแปร global
-unsigned long displayStartTime = 0;  // เวลาเริ่มแสดงผล
-bool isDisplaying = false;           // สถานะแสดงผล LCD
+// LCD display state
+unsigned long displayStartTime = 0;
+bool isDisplaying = false;
 
-String inputString = "";      // Store data from scanner
-String DataScanner = "";      // Processed scanner data
-bool stringComplete = false;  // Flag to indicate complete data
-byte volume = 22; //กำหนดระดับความดัง 0 - 30
+String inputString = "";
+String DataScanner = "";
+bool stringComplete = false;
+bool isDFPlayerReady = false;  // เช็คสถานะ DFPlayer
+byte volume = 23;
 
 struct Medicine {
   String code;
@@ -39,9 +40,7 @@ struct Medicine {
   int track;
 };
 
-String currentState = "";  // เก็บสถานะปัจจุบัน
-
-// Array to store medicine data
+// Medicine list
 Medicine medicines[] = {
   { "001", "Paracetamol", 2 },
   { "002", "CHLORPHEN", 3 },
@@ -59,48 +58,40 @@ Medicine medicines[] = {
 void setup() {
   Serial.begin(9600);
   myHardwareSerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);  // Initialize Serial1
-  pinMode(IR_SENSOR_PIN, INPUT);                             // IR sensor input
-  pinMode(SCANNER_PIN, OUTPUT);                              // Scanner control output
+  pinMode(IR_SENSOR_PIN, INPUT);
+  pinMode(SCANNER_PIN, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
 
-  lcd.begin();      // Initialize LCD
-  lcd.backlight();  // Turn on LCD backlight
+  lcd.begin();
+  lcd.backlight();
 
-  inputString.reserve(200);  // Reserve memory for string
+  inputString.reserve(200);
+  digitalWrite(SCANNER_PIN, HIGH);
 
-  digitalWrite(SCANNER_PIN, HIGH);  // Turn scanner off initially
-
-  // Initialize DFPlayer
-  unsigned long startMillis = millis();
-  while (!myDFPlayer.begin(myHardwareSerial)) {
-    if (millis() - startMillis > 5000) {  // Timeout after 5 seconds
-      Serial.println(F("Unable to begin DFPlayer"));
-      break;
+  if (!myDFPlayer.begin(myHardwareSerial)) {
+    Serial.println(F("DFPlayer ไม่ตอบสนอง กำลังลองใหม่..."));
+    delay(1000);
+    if (!myDFPlayer.begin(myHardwareSerial)) {
+      Serial.println(F("การเริ่มต้น DFPlayer ล้มเหลว กรุณาตรวจสอบการเชื่อมต่อ"));
+      isDFPlayerReady = false;
+    } else {
+      isDFPlayerReady = true;
     }
-    delay(100);
+  } else {
+    isDFPlayerReady = true;
   }
-  // myDFPlayer.volume(volume);  // Set volume level
-  Serial.println(F("DFPlayer Mini online."));
-
-  lcd.setCursor(0, 0);
-  lcd.print("Ready to use");
-  
-  delay(5000);  // แสดงข้อความ 5 วินาที
-  lcd.clear();   // ล้างจอ LCD
 }
 
 void handleMedicine(String scannerData) {
-  scannerData.trim();  // Remove any whitespace or newline characters
+  scannerData.trim();
+  scannerData.replace("\r", "");  // ลบ carriage return (ถ้ามี)
 
   Serial.println("Real Data: " + scannerData);
 
-  // Filter printable characters
   String cleanData = "";
   for (size_t i = 0; i < scannerData.length(); i++) {
     char c = scannerData[i];
-    if (isPrintable(c)) {
-      cleanData += c;
-    }
+    if (isPrintable(c)) cleanData += c;
   }
   scannerData = cleanData;
 
@@ -109,33 +100,29 @@ void handleMedicine(String scannerData) {
       Serial.println("Medicine: " + med.name);
 
       lcd.clear();
-
-      // Initialize strings for the two lines
       String firstLine, secondLine;
-      int maxLineLength = 16;  // Maximum characters per line for 1602 LCD
+      int maxLineLength = 16;
 
-      // Check if the name is longer than the maximum line length
       if (med.name.length() > maxLineLength) {
-        firstLine = med.name.substring(0, maxLineLength);  // First 16 characters
-        secondLine = med.name.substring(maxLineLength);    // Remaining characters
+        firstLine = med.name.substring(0, maxLineLength);
+        secondLine = med.name.substring(maxLineLength);
       } else {
-        firstLine = med.name;  // Fits in one line
-        secondLine = "";       // Second line remains empty
+        firstLine = med.name;
+        secondLine = "";
       }
 
-      // Display on the LCD
       lcd.setCursor(0, 0);
       lcd.print(firstLine);
       lcd.setCursor(0, 1);
       lcd.print(secondLine);
 
-      // Play the corresponding track
-      myDFPlayer.volume(volume); 
-      myDFPlayer.play(med.track);
-      Serial.print("play med.track:");
+      if (isDFPlayerReady) {
+        myDFPlayer.volume(volume);
+        myDFPlayer.play(med.track);
+      }
+      Serial.print("Playing track: ");
       Serial.println(med.track);
 
-      // Start timer for displaying on LCD
       displayStartTime = millis();
       isDisplaying = true;
 
@@ -143,65 +130,70 @@ void handleMedicine(String scannerData) {
     }
   }
 
-  // If no match found
-  Serial.println("Medicine not found in system.");
+  Serial.println("Medicine not found.");
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Not in system");
-  myDFPlayer.volume(volume); 
-  myDFPlayer.play(1);
 
-  // Start timer for displaying "Not in system"
+  if (isDFPlayerReady) {
+    myDFPlayer.volume(volume);
+    myDFPlayer.play(1);
+  }
+
   displayStartTime = millis();
   isDisplaying = true;
-
-  Serial.println("Cleaned Data: " + scannerData);
 }
 
 void loop() {
-  if (digitalRead(IR_SENSOR_PIN) == LOW && !isScanning) {
-    startScanning();
+  if (digitalRead(IR_SENSOR_PIN) == LOW && !isScanning && !coolDown) {
+    delay(50);  // หน่วงเวลาเพื่อ Debounce
+    if (digitalRead(IR_SENSOR_PIN) == LOW) {
+      startScanning();
+    }
   }
 
   if (isScanning && millis() - startScanTime > scanDuration) {
     stopScanning();
   }
 
-  // Handle data if string is complete
   if (stringComplete) {
     handleMedicine(DataScanner);
-    inputString = "";  // Clear input buffer
-    DataScanner = "";  // Clear processed data
+    inputString = "";
+    DataScanner = "";
     stringComplete = false;
   }
 
-  //   // ตรวจสอบว่าควรลบข้อความจาก LCD หรือไม่
   if (isDisplaying && millis() - displayStartTime >= clearDelay) {
     lcd.clear();
-    isDisplaying = false;  // Reset status
+    isDisplaying = false;
+  }
+
+  if (coolDown && millis() - coolDownStartTime >= coolDownDuration) {
+    coolDown = false;
   }
 }
 
-// ฟังก์ชันเริ่มการสแกน
 void startScanning() {
-  isScanning = true;
-  startScanTime = millis();
-  digitalWrite(SCANNER_PIN, LOW); // เปิดเครื่องสแกน
-  digitalWrite(LED_PIN, HIGH);   // เปิดไฟ LED
-  Serial.println("Scanning...");
+  if (!isScanning) {
+    isScanning = true;
+    startScanTime = millis();
+    digitalWrite(SCANNER_PIN, LOW);
+    digitalWrite(LED_PIN, HIGH);
+    Serial.println(F("Scanning..."));
+  }
 }
 
-// ฟังก์ชันหยุดการสแกน
 void stopScanning() {
-  isScanning = false;
-  digitalWrite(SCANNER_PIN, HIGH); // ปิดเครื่องสแกน
-  digitalWrite(LED_PIN, LOW);      // ปิดไฟ LED
-  Serial.println("Scan complete");
-  delay(1000); // แสดงข้อความก่อนกลับสู่สถานะพร้อม
-  lcd.clear();
+  if (isScanning) {
+    isScanning = false;
+    digitalWrite(SCANNER_PIN, HIGH);
+    digitalWrite(LED_PIN, LOW);
+    Serial.println(F("Scan complete"));
+    coolDown = true;
+    coolDownStartTime = millis();
+  }
 }
 
-// Function to read data from serial input
 void serialEvent() {
   while (Serial.available()) {
     char inChar = (char)Serial.read();
